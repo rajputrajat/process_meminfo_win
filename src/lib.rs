@@ -1,12 +1,15 @@
 use log::info;
 use std::{mem, string::FromUtf16Error};
-use windows::Win32::{
-    Foundation::{GetLastError, HANDLE, HINSTANCE, PWSTR, WIN32_ERROR},
-    System::{
-        ProcessStatus::{
-            K32EnumProcessModulesEx, K32EnumProcesses, K32GetModuleBaseNameW, LIST_MODULES_ALL,
+use windows::{
+    core::Error as WinCoreError,
+    Win32::{
+        Foundation::{GetLastError, HANDLE, HINSTANCE, PWSTR, WIN32_ERROR},
+        System::{
+            ProcessStatus::{
+                K32EnumProcessModulesEx, K32EnumProcesses, K32GetModuleBaseNameW, LIST_MODULES_ALL,
+            },
+            Threading::{OpenProcess, PROCESS_QUERY_INFORMATION, PROCESS_VM_READ},
         },
-        Threading::{OpenProcess, PROCESS_QUERY_INFORMATION, PROCESS_VM_READ},
     },
 };
 
@@ -35,8 +38,10 @@ pub fn get_process_name(handle: HANDLE) -> Result<String, CustomError> {
     }
 }
 
-pub fn get_process_handle(pid: ProcessId) -> HANDLE {
-    unsafe { OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, false, pid) }
+pub fn get_process_handle(pid: ProcessId) -> Result<HANDLE, CustomError> {
+    let handle =
+        unsafe { OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, false, pid) }.ok()?;
+    Ok(handle)
 }
 
 pub type ProcessId = u32;
@@ -81,6 +86,7 @@ pub fn get_last_error() -> CustomError {
 pub enum CustomError {
     Win32(WIN32_ERROR),
     Utf16(FromUtf16Error),
+    WinCore(WinCoreError),
     Other(String),
 }
 
@@ -93,5 +99,11 @@ impl From<WIN32_ERROR> for CustomError {
 impl From<FromUtf16Error> for CustomError {
     fn from(e: FromUtf16Error) -> Self {
         CustomError::Utf16(e)
+    }
+}
+
+impl From<WinCoreError> for CustomError {
+    fn from(e: WinCoreError) -> Self {
+        CustomError::WinCore(e)
     }
 }
