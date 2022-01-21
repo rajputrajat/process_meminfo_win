@@ -29,9 +29,10 @@ pub fn get_process_name(handle: HANDLE) -> Result<String, CustomError> {
         let mut wstr_buffer: [u16; 256] = [0; 256];
         let base_name = PWSTR(wstr_buffer.as_mut_ptr());
         unsafe { K32GetModuleBaseNameW(handle, hmodule, base_name, wstr_buffer.len() as u32) };
-        return Ok(String::from_utf16(&wstr_buffer)?);
+        Ok(String::from_utf16(&wstr_buffer)?)
+    } else {
+        Err(get_last_error())
     }
-    return Err(CustomError::Other("couldn't get name".to_owned()));
 }
 
 pub fn get_process_handle(pid: ProcessId) -> HANDLE {
