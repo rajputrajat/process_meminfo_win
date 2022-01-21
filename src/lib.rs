@@ -1,11 +1,44 @@
 use log::info;
-use std::mem;
+use std::{mem, string::FromUtf16Error};
 use windows::Win32::{
-    Foundation::{GetLastError, WIN32_ERROR},
-    System::ProcessStatus::K32EnumProcesses,
+    Foundation::{GetLastError, HANDLE, HINSTANCE, PWSTR, WIN32_ERROR},
+    System::{
+        ProcessStatus::{
+            K32EnumProcessModulesEx, K32EnumProcesses, K32GetModuleBaseNameW, LIST_MODULES_ALL,
+        },
+        Threading::{OpenProcess, PROCESS_QUERY_INFORMATION, PROCESS_VM_READ},
+    },
 };
 
-fn read_process_memory() {}
+fn read_process_memory(pid: ProcessId) {}
+
+pub fn get_process_name(handle: HANDLE) -> Result<String, CustomError> {
+    let mut hmodule = HINSTANCE::default();
+    let mut bytes_needed: u32 = 0;
+    if unsafe {
+        K32EnumProcessModulesEx(
+            handle,
+            &mut hmodule,
+            mem::size_of_val(&hmodule) as u32,
+            &mut bytes_needed,
+            LIST_MODULES_ALL,
+        )
+    }
+    .as_bool()
+    {
+        let mut wstr_buffer: [u16; 256] = [0; 256];
+        let base_name = PWSTR(wstr_buffer.as_mut_ptr());
+        unsafe { K32GetModuleBaseNameW(handle, hmodule, base_name, wstr_buffer.len() as u32) };
+        return Ok(String::from_utf16(&wstr_buffer)?);
+    }
+    return Err(CustomError::Other("couldn't get name".to_owned()));
+}
+
+pub fn get_process_handle(pid: ProcessId) -> HANDLE {
+    unsafe { OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, false, pid) }
+}
+
+pub type ProcessId = u32;
 
 #[derive(Debug)]
 pub struct ProcessIds(pub Vec<u32>);
@@ -46,11 +79,18 @@ pub fn get_last_error() -> CustomError {
 #[derive(Debug)]
 pub enum CustomError {
     Win32(WIN32_ERROR),
+    Utf16(FromUtf16Error),
     Other(String),
 }
 
 impl From<WIN32_ERROR> for CustomError {
     fn from(e: WIN32_ERROR) -> Self {
         CustomError::Win32(e)
+    }
+}
+
+impl From<FromUtf16Error> for CustomError {
+    fn from(e: FromUtf16Error) -> Self {
+        CustomError::Utf16(e)
     }
 }
