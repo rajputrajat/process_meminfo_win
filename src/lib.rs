@@ -1,21 +1,38 @@
 use log::info;
 use std::{mem, string::FromUtf16Error};
+pub use windows::Win32::System::ProcessStatus::PROCESS_MEMORY_COUNTERS;
 use windows::{
     core::Error as WinCoreError,
     Win32::{
         Foundation::{GetLastError, HANDLE, HINSTANCE, PWSTR, WIN32_ERROR},
         System::{
             ProcessStatus::{
-                K32EnumProcessModulesEx, K32EnumProcesses, K32GetModuleBaseNameW, LIST_MODULES_ALL,
+                K32EnumProcessModulesEx, K32EnumProcesses, K32GetModuleBaseNameW,
+                K32GetProcessMemoryInfo, LIST_MODULES_ALL,
             },
             Threading::{OpenProcess, PROCESS_QUERY_INFORMATION, PROCESS_VM_READ},
         },
     },
 };
 
-fn read_process_memory(pid: ProcessId) {}
+pub fn read_process_memory(handle: &HANDLE) -> Result<PROCESS_MEMORY_COUNTERS, CustomError> {
+    let mut mem_counters = PROCESS_MEMORY_COUNTERS::default();
+    if unsafe {
+        K32GetProcessMemoryInfo(
+            handle,
+            &mut mem_counters,
+            mem::size_of_val(&mem_counters) as u32,
+        )
+    }
+    .as_bool()
+    {
+        Ok(mem_counters)
+    } else {
+        Err(get_last_error())
+    }
+}
 
-pub fn get_process_name(handle: HANDLE) -> Result<String, CustomError> {
+pub fn get_process_name(handle: &HANDLE) -> Result<String, CustomError> {
     let mut hmodule = HINSTANCE::default();
     let mut bytes_needed: u32 = 0;
     if unsafe {
