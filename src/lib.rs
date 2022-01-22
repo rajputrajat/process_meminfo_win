@@ -1,6 +1,8 @@
 use log::info;
 use std::{mem, string::FromUtf16Error};
-pub use windows::Win32::System::ProcessStatus::PROCESS_MEMORY_COUNTERS;
+pub use windows::Win32::System::ProcessStatus::{
+    PROCESS_MEMORY_COUNTERS, PROCESS_MEMORY_COUNTERS_EX,
+};
 use windows::{
     core::Error as WinCoreError,
     Win32::{
@@ -15,18 +17,23 @@ use windows::{
     },
 };
 
-pub fn read_process_memory(handle: &HANDLE) -> Result<PROCESS_MEMORY_COUNTERS, CustomError> {
-    let mut mem_counters = PROCESS_MEMORY_COUNTERS::default();
+pub fn read_process_memory(handle: &HANDLE) -> Result<PROCESS_MEMORY_COUNTERS_EX, CustomError> {
+    let mut mem_counters_ex = PROCESS_MEMORY_COUNTERS_EX::default();
+    let mem_counters = unsafe {
+        mem::transmute::<*mut PROCESS_MEMORY_COUNTERS_EX, *mut PROCESS_MEMORY_COUNTERS>(
+            &mut mem_counters_ex,
+        )
+    };
     if unsafe {
         K32GetProcessMemoryInfo(
             handle,
-            &mut mem_counters,
-            mem::size_of_val(&mem_counters) as u32,
+            mem_counters,
+            mem::size_of_val(&mem_counters_ex) as u32,
         )
     }
     .as_bool()
     {
-        Ok(mem_counters)
+        Ok(mem_counters_ex)
     } else {
         Err(get_last_error())
     }
