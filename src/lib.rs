@@ -1,7 +1,7 @@
 use log::info;
 use std::{mem, string::FromUtf16Error};
 pub use windows::Win32::System::ProcessStatus::{
-    PROCESS_MEMORY_COUNTERS, PROCESS_MEMORY_COUNTERS_EX,
+    PERFORMANCE_INFORMATION, PROCESS_MEMORY_COUNTERS_EX,
 };
 use windows::{
     core::Error as WinCoreError,
@@ -10,14 +10,31 @@ use windows::{
         System::{
             ProcessStatus::{
                 K32EnumProcessModulesEx, K32EnumProcesses, K32GetModuleBaseNameW,
-                K32GetProcessMemoryInfo, LIST_MODULES_ALL,
+                K32GetPerformanceInfo, K32GetProcessMemoryInfo, LIST_MODULES_ALL,
+                PROCESS_MEMORY_COUNTERS,
             },
             Threading::{OpenProcess, PROCESS_QUERY_INFORMATION, PROCESS_VM_READ},
         },
     },
 };
 
-pub fn read_process_memory(handle: &HANDLE) -> Result<PROCESS_MEMORY_COUNTERS_EX, CustomError> {
+pub fn get_performance_info() -> Result<PERFORMANCE_INFORMATION, CustomError> {
+    let mut performance_info = PERFORMANCE_INFORMATION::default();
+    if unsafe {
+        K32GetPerformanceInfo(
+            &mut performance_info,
+            mem::size_of_val(&performance_info) as u32,
+        )
+    }
+    .as_bool()
+    {
+        Ok(performance_info)
+    } else {
+        Err(get_last_error())
+    }
+}
+
+pub fn get_process_memory(handle: &HANDLE) -> Result<PROCESS_MEMORY_COUNTERS_EX, CustomError> {
     let mut mem_counters_ex = PROCESS_MEMORY_COUNTERS_EX::default();
     let mem_counters = unsafe {
         mem::transmute::<*mut PROCESS_MEMORY_COUNTERS_EX, *mut PROCESS_MEMORY_COUNTERS>(
